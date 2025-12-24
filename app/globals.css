@@ -1,0 +1,173 @@
+/* Premium Design System - Mobile Hub Luxury V2 */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Luxury Theme Core Variables (Hex) */
+    --theme-primary: #d4af37;
+    --theme-secondary: #000000;
+    --theme-accent: #f9d976;
+    --theme-background: #050505;
+    --theme-surface: #0f0f0f;
+    --theme-text: #ffffff;
+
+    /* Shadcn/UI Compatibility (Mapped to Theme) */
+    --background: var(--theme-background);
+    --foreground: var(--theme-text);
+    --primary: var(--theme-primary);
+    --secondary: var(--theme-secondary);
+    --accent: var(--theme-accent);
+    --border: rgba(255, 255, 255, 0.1);
+    --ring: var(--theme-primary);
+    --radius: 1rem;
+  }
+
+  .dark {
+    --background: var(--theme-background);
+    --foreground: var(--theme-text);
+    --primary: var(--theme-primary);
+    --secondary: var(--theme-secondary);
+    --accent: var(--theme-accent);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased font-sans;
+    background-color: var(--theme-background);
+    color: var(--theme-text);
+  }
+}
+
+/* Luxury UI Utility Classes */
+@layer utilities {
+  .glass-premium {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+  }
+
+  .glass-dark-premium {
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(30px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .text-gradient-gold {
+    background: linear-gradient(to right, #d4af37, #f9d976, #b8860b);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+
+  .shimmer {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+    background-size: 1000px 100%;
+    animation: shimmer 2s infinite linear;
+  }
+}
+
+/* Keyframes & Animations */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-15px) rotate(1deg);
+  }
+}
+
+@keyframes glow-pulse {
+
+  0%,
+  100% {
+    filter: drop-shadow(0 0 5px var(--theme-primary));
+    opacity: 0.8;
+  }
+
+  50% {
+    filter: drop-shadow(0 0 20px var(--theme-primary));
+    opacity: 1;
+  }
+}
+
+@keyframes slow-zoom {
+  0% {
+    transform: scale(1.05);
+  }
+
+  100% {
+    transform: scale(1.15);
+  }
+}
+
+.animate-slow-zoom {
+  animation: slow-zoom 20s ease-in-out infinite alternate;
+}
+
+/* Custom Effects */
+.animate-float {
+  animation: float 8s ease-in-out infinite;
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 4s ease-in-out infinite;
+}
+
+.text-outline-luxury {
+  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.1);
+  color: transparent;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #050505;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1a1a1a;
+  border-radius: 10px;
+  border: 2px solid #050505;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #d4af37;
+}
+
+/* Selection */
+::selection {
+  background: #d4af37;
+  color: #000;
+}
