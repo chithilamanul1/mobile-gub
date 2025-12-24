@@ -1,0 +1,213 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Auth.js / NextAuth Models
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          String    @default("USER") // USER, ADMIN, OWNER
+  
+  accounts      Account[]
+  sessions      Session[]
+  orders        Order[]
+  wishlist      Wishlist?
+  tickets       Ticket[]
+  reviews       Review[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?
+  access_token       String?
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?
+  session_state      String?
+ 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+ 
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+ 
+  @@unique([identifier, token])
+}
+
+// RBAC
+model StaffAccess {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  role        String   // OWNER, ADMIN
+  permissions String   // JSON string: ["manage_inventory", "view_reports"]
+  createdAt   DateTime @default(now())
+}
+
+// Commerce Models
+model Product {
+  id                String   @id @default(uuid())
+  sku               String?  @unique
+  model_name        String
+  brand             String
+  category          String   @default("Smartphone") // Smartphone, Tablet, Accessory
+  description       String?
+  price_lkr         Float
+  stock_count       Int      @default(0)
+  image_url         String?  // Main thumbnail
+  images            ProductImage[]
+  is_trcsl_approved Boolean  @default(true)
+  
+  // Relations
+  imeis             IMEI[]
+  sold_devices      SoldDevice[]
+  reviews           Review[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model ProductImage {
+  id        String   @id @default(uuid())
+  url       String
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model IMEI {
+  id            String   @id @default(uuid())
+  number        String   @unique
+  is_registered Boolean  @default(true)
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  status        String   @default("AVAILABLE") // AVAILABLE, SOLD
+}
+
+model SoldDevice {
+  id        String   @id @default(uuid())
+  imei      String   @unique // The IMEI that was sold
+  
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  
+  // Link to Order if applicable
+  orderId   String?
+  order     Order?   @relation(fields: [orderId], references: [id])
+  
+  sold_at   DateTime @default(now())
+}
+
+model Order {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id])
+  total     Float
+  status    String       @default("PENDING") // PENDING, PROCESSING, COMPLETED, CANCELLED
+  
+  items           SoldDevice[]
+  payment_method  String?      @default("INSTITUTIONAL")
+  shipping_address String?
+  
+  createdAt DateTime     @default(now())
+}
+
+model Wishlist {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  productIds String  // JSON array of Product IDs [ "uuid-1", "uuid-2" ]
+}
+
+model Ticket {
+    id          String    @id @default(uuid())
+    subject     String
+    description String
+    status      String    @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED
+    priority    String    @default("NORMAL") // NORMAL, URGENT, VIP
+    
+    userId      String
+    user        User      @relation(fields: [userId], references: [id])
+    
+    messages    TicketMessage[]
+    
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+}
+
+model TicketMessage {
+    id          String    @id @default(uuid())
+    content     String
+    senderRole  String    // USER, ADMIN
+    
+    ticketId    String
+    ticket      Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+    
+    createdAt   DateTime  @default(now())
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  rating    Int      // 1-5
+  comment   String?
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id])
+  
+  type      String   @default("PRODUCT") // PRODUCT, SITE
+
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String   // ORDER, TICKET, SECURITY, SYSTEM
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model SystemConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
