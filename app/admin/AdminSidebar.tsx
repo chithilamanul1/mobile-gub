@@ -8,7 +8,8 @@ import {
     ShoppingCart,
     Users,
     MessageSquare,
-    Settings
+    Settings,
+    Monitor
 } from "lucide-react"
 import { SignOutButton } from "@/components/auth/SignOutButton"
 
@@ -28,6 +29,7 @@ export function AdminSidebar({ user }: { user: any }) {
                 <AdminNavLink href="/admin" icon={<LayoutDashboard />} label="Dashboard" active={pathname === "/admin"} />
                 <AdminNavLink href="/admin/orders" icon={<ShoppingCart />} label="Orders" active={pathname.startsWith("/admin/orders")} />
                 <AdminNavLink href="/admin/products" icon={<Package />} label="Inventory" active={pathname.startsWith("/admin/products")} />
+                <AdminNavLink href="/admin/pos" icon={<Monitor />} label="POS" active={pathname.startsWith("/admin/pos")} />
                 <AdminNavLink href="/admin/users" icon={<Users />} label="Users" active={pathname.startsWith("/admin/users")} />
                 <AdminNavLink href="/admin/customers" icon={<Users />} label="Customers" active={pathname.startsWith("/admin/customers")} />
                 <AdminNavLink href="/admin/tickets" icon={<MessageSquare />} label="Tickets" active={pathname.startsWith("/admin/tickets")} />
