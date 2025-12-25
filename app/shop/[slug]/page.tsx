@@ -9,6 +9,8 @@ import { FaShieldAlt, FaBox, FaTruck, FaShoppingCart, FaBolt } from "react-icons
 import { MdVerified } from "react-icons/md"
 import { prisma } from "@/lib/prisma"
 import Image from "next/image"
+import { ReviewForm } from "@/components/reviews/ReviewForm"
+import { ReviewList } from "@/components/reviews/ReviewList"
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
     const { slug } = await params
@@ -156,6 +158,30 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                     </div>
 
                 </div>
+            </div>
+
+            {/* Reviews Section */}
+            <div className="container mx-auto px-6 max-w-7xl mt-24">
+                <section className="pt-24 border-t border-gray-100 dark:border-white/5">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
+                        {/* Review Form */}
+                        <div className="lg:col-span-4 space-y-8">
+                            <div>
+                                <h3 className="text-2xl font-black uppercase tracking-tight mb-2">Rate & Review</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    Share your experience with the {product.model_name}. Your feedback helps our community.
+                                </p>
+                            </div>
+                            <ReviewForm productId={product.id} />
+                        </div>
+
+                        {/* Review List */}
+                        <div className="lg:col-span-8">
+                            <h3 className="text-2xl font-black uppercase tracking-tight mb-8">Community Feedback</h3>
+                            <ReviewList productId={product.id} />
+                        </div>
+                    </div>
+                </section>
             </div>
         </div>
     )

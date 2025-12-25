@@ -1,14 +1,10 @@
-import { prisma } from "@/lib/prisma"
+import { adminDb } from "@/lib/firebase-admin"
+
 import { ProductCard } from "@/components/product/ProductCard"
 import { Metadata } from "next"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { FaShieldAlt } from "react-icons/fa"
-
-export const metadata: Metadata = {
-    title: "The Vault | Authorized Mobile Hardware Sri Lanka",
-    description: "Browse our master registry of authorized genuine mobile devices. Apple, Samsung, and Xiaomi assets, TRCSL certified with institutional warranty.",
-}
 
 export default async function ShopPage({ searchParams }: { searchParams: Promise<any> }) {
     const sParams = await searchParams
@@ -16,16 +12,38 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
     const category = sParams.category
     const sort = sParams.sort || 'desc'
 
-    const products = (await (prisma.product as any).findMany({
-        where: {
-            brand: brand ? brand : undefined,
-            category: category ? category : undefined,
-        },
-        orderBy: { createdAt: sort === 'asc' ? 'asc' : 'desc' },
-    })) as any[]
+    // Fetch all products from Firestore (Firestore limits: expensive to do "OR" or dynamic "GROUP BY")
+    // For this scale, fetching all is acceptable
+    const productsSnapshot = await adminDb.collection("products").get()
+    let allProducts = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[]
 
-    const allBrands = (await (prisma.product as any).groupBy({ by: ['brand'] })) as any[]
-    const allCategories = (await (prisma.product as any).groupBy({ by: ['category'] })) as any[]
+    // Manual Filtering
+    if (brand) {
+        allProducts = allProducts.filter(p => p.brand === brand)
+    }
+    if (category) {
+        allProducts = allProducts.filter(p => p.category === category)
+    }
+
+    // Manual Sorting
+    allProducts.sort((a, b) => {
+        const dateA = new Date(a.createdAt?.toDate ? a.createdAt.toDate() : a.createdAt).getTime()
+        const dateB = new Date(b.createdAt?.toDate ? b.createdAt.toDate() : b.createdAt).getTime()
+        return sort === 'asc' ? dateA - dateB : dateB - dateA
+    })
+
+    const products = allProducts
+
+    // Manual Grouping (Original full list)
+    const fullSnapshot = await adminDb.collection("products").get()
+    const fullList = fullSnapshot.docs.map(doc => doc.data()) as any[] // Optimize: Use simple set
+
+    const brandsSet = new Set(fullList.map((p: any) => p.brand).filter(Boolean))
+    const categoriesSet = new Set(fullList.map((p: any) => p.category).filter(Boolean))
+
+    const allBrands = Array.from(brandsSet).map(b => ({ brand: b }))
+    const allCategories = Array.from(categoriesSet).map(c => ({ category: c }))
+
 
     return (
         <div className="bg-white dark:bg-black min-h-screen text-gray-900 dark:text-white pt-32 pb-24">

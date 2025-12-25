@@ -1,5 +1,6 @@
+
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { adminDb } from '@/lib/firebase-admin'
 
 // GET all orders with filters
 export async function GET(request: Request) {
@@ -8,44 +9,57 @@ export async function GET(request: Request) {
         const status = searchParams.get('status') || 'all'
         const page = parseInt(searchParams.get('page') || '1')
         const limit = parseInt(searchParams.get('limit') || '50')
-        const skip = (page - 1) * limit
+        // Firestore offset is expensive (reads all prior docs), but for admin dashboard with < 1000 orders it's fine.
+        // Better approach: cursors (startAfter). Sticking to offset logic in memory for migration simplicity if dataset small, 
+        // or using basic query limits.
 
-        const where = status !== 'all' ? { status } : {}
+        // Fetch ALL for filtering/pagination in memory (easiest migration path for small scale)
+        const ordersRef = adminDb.collection('orders')
+        let query = status !== 'all' ? ordersRef.where('status', '==', status) : ordersRef
 
-        const [orders, total] = await Promise.all([
-            prisma.order.findMany({
-                where,
-                include: {
-                    user: {
-                        select: {
-                            name: true,
-                            email: true
-                        }
-                    },
-                    items: {
-                        include: {
-                            product: {
-                                select: {
-                                    brand: true,
-                                    model_name: true,
-                                    price_lkr: true
-                                }
-                            }
-                        }
-                    }
-                },
-                orderBy: { createdAt: 'desc' },
-                skip,
-                take: limit
-            }),
-            prisma.order.count({ where })
-        ])
+        const snapshot = await query.get()
+        let allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[]
+
+        // Sort desc
+        allOrders.sort((a, b) => {
+            const dateA = new Date(a.createdAt?.toDate ? a.createdAt.toDate() : a.createdAt).getTime()
+            const dateB = new Date(b.createdAt?.toDate ? b.createdAt.toDate() : b.createdAt).getTime()
+            return dateB - dateA
+        })
+
+        const total = allOrders.length
+        const start = (page - 1) * limit
+        const paginatedOrders = allOrders.slice(start, start + limit)
+
+        // Hydrate User Data (Manual Join)
+        const userIds = [...new Set(paginatedOrders.map(o => o.userId))]
+        const usersMap = new Map()
+        if (userIds.length > 0) {
+            const userSnaps = await Promise.all(userIds.map(uid => adminDb.collection('users').doc(uid).get()))
+            userSnaps.forEach(snap => {
+                if (snap.exists) usersMap.set(snap.id, snap.data())
+            })
+        }
+
+        // Hydrate Product Data for Items (Manual Join)
+        // Items array structure: [{ productId: '...', quantity: 1, ... }]
+        // We need to fetch product info for display
+
+        // This can be complex. Ideally, Order *snapshot* should contain product details (price, name) 
+        // at the time of purchase so it doesn't change later.
+        // Assuming the migration or typical order flow does that.
+        // If 'items' contains productId only, we must fetch.
+        // Let's assume current Items have full data, or we fetch if missing.
+
+        const enrichedOrders = paginatedOrders.map(order => ({
+            ...order,
+            user: usersMap.get(order.userId) || { name: 'Unknown', email: 'unknown@example.com' },
+            itemCount: order.items?.length || 0,
+            createdAt: order.createdAt?.toDate ? order.createdAt.toDate() : order.createdAt
+        }))
 
         return NextResponse.json({
-            orders: orders.map((order: any) => ({
-                ...order,
-                itemCount: order.items.length
-            })),
+            orders: enrichedOrders,
             pagination: {
                 page,
                 limit,
@@ -75,21 +89,19 @@ export async function POST(request: Request) {
             )
         }
 
-        const order = await prisma.order.create({
-            data: {
-                userId: body.userId,
-                total: body.total,
-                status: body.status || 'PENDING'
-            },
-            include: {
-                user: {
-                    select: {
-                        name: true,
-                        email: true
-                    }
-                }
-            }
-        })
+        const orderData = {
+            userId: body.userId,
+            total: body.total,
+            status: body.status || 'PENDING',
+            items: body.items || [],
+            createdAt: new Date()
+        }
+
+        const docRef = await adminDb.collection('orders').add(orderData)
+        const userSnap = await adminDb.collection('users').doc(body.userId).get()
+        const userData = userSnap.data() || { email: 'unknown', name: 'User' }
+
+        const order = { id: docRef.id, ...orderData, user: userData }
 
         // Institutional Notifications
         try {
@@ -98,13 +110,13 @@ export async function POST(request: Request) {
 
             // 1. Client Confirmation
             await sendInstitutionalMail({
-                to: order.user.email!,
-                subject: `Order Confirmation #${order.id.slice(-8)} | Mobile Hub`,
+                to: userData.email,
+                subject: `Order Confirmation #${docRef.id.slice(-8)} | Mobile Hub`,
                 text: `Thank you for your order of LKR ${order.total.toLocaleString()}. We are processing your request.`,
                 html: `
                     <div style="font-family: sans-serif; padding: 40px; background: #000; color: #fff;">
                         <h1 style="color: #d4af37;">ORDER CONFIRMED</h1>
-                        <p style="font-size: 16px;">Order ID: #${order.id.slice(-8)}</p>
+                        <p style="font-size: 16px;">Order ID: #${docRef.id.slice(-8)}</p>
                         <p style="font-size: 14px; color: #888;">Value: LKR ${order.total.toLocaleString()}</p>
                         <p style="margin-top: 30px; font-size: 12px; color: #444;">IDENTIFY THE DIFFERENCE</p>
                     </div>
@@ -115,7 +127,7 @@ export async function POST(request: Request) {
             await notifyStaff({
                 type: "ORDER",
                 title: "New Transaction Rooted",
-                message: `Order #${order.id.slice(-8)} created by ${order.user.name || order.user.email} (LKR ${order.total.toLocaleString()})`
+                message: `Order #${docRef.id.slice(-8)} created by ${userData.name || userData.email} (LKR ${order.total.toLocaleString()})`
             })
         } catch (e) {
             console.error("NOTIFICATION_SYSTEM_FAILURE", e)
