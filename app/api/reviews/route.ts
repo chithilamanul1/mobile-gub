@@ -23,7 +23,7 @@ export async function POST(req: Request) {
         const validated = reviewSchema.safeParse(body)
 
         if (!validated.success) {
-            return new NextResponse(validated.error.errors[0].message, { status: 400 })
+            return new NextResponse(validated.error.errors[0]?.message || "Invalid input", { status: 400 })
         }
 
         const { rating, comment, images, productId, type } = validated.data
