@@ -11,6 +11,8 @@ import { prisma } from "@/lib/prisma"
 import Image from "next/image"
 import { ReviewForm } from "@/components/reviews/ReviewForm"
 import { ReviewList } from "@/components/reviews/ReviewList"
+import { DeliveryEstimator } from "@/components/product/DeliveryEstimator"
+import { StockNotifier } from "@/components/product/StockNotifier"
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
     const { slug } = await params
@@ -133,15 +135,21 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                             </div>
                         </div>
 
-                        {/* Visual Variants & Urgency */}
-                        <VisualVariantSelector stock={product.stock_count} />
+                        <DeliveryEstimator />
+                        <div className="h-px bg-gray-100 dark:bg-white/5 my-4" />
+                    </div>
 
-                        {/* Easy Financing */}
-                        <div className="space-y-4">
-                            <FinancingOptions price={product.price_lkr} />
-                        </div>
+                    {/* Visual Variants & Urgency */}
+                    <VisualVariantSelector stock={product.stock_count} />
 
-                        {/* Conversion Point (Clear & Strong) */}
+                    {/* Easy Financing */}
+                    <div className="space-y-4">
+                        <FinancingOptions price={product.price_lkr} />
+                        <InstallmentWidget price={product.price_lkr} />
+                    </div>
+
+                    {/* Conversion Point (Clear & Strong) */}
+                    {product.stock_count > 0 ? (
                         <div className="flex flex-col sm:flex-row gap-4 pt-4">
                             <Button className="flex-1 bg-black dark:bg-white text-white dark:text-black hover:bg-primary dark:hover:bg-primary font-black h-16 rounded-2xl text-sm tracking-widest uppercase transition-all shadow-xl">
                                 BUY NOW
@@ -155,8 +163,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                                 }}
                             />
                         </div>
-                    </div>
-
+                    ) : (
+                        <StockNotifier productName={product.model_name} />
+                    )}
                 </div>
             </div>
 
