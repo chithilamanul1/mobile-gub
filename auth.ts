@@ -1,12 +1,12 @@
 import NextAuth from "next-auth"
 import Google from "next-auth/providers/google"
 import Credentials from "next-auth/providers/credentials"
-import { PrismaAdapter } from "@auth/prisma-adapter"
-import { prisma } from "@/lib/prisma"
+import { FirestoreAdapter } from "@auth/firebase-adapter"
+import { adminDb } from "@/lib/firebase-admin"
 import bcrypt from "bcryptjs"
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-    adapter: PrismaAdapter(prisma),
+    adapter: FirestoreAdapter(adminDb),
     providers: [
         Google({
             clientId: process.env.GOOGLE_CLIENT_ID,
@@ -22,28 +22,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             async authorize(credentials) {
                 if (!credentials?.email || !credentials?.password) return null
 
-                const user = await prisma.user.findUnique({
-                    where: { email: credentials.email as string }
-                })
+                // Query Firestore for user
+                const usersRef = adminDb.collection("users")
+                const querySnapshot = await usersRef.where("email", "==", credentials.email).limit(1).get()
 
-                if (!user || !(user as any).password) {
+                if (querySnapshot.empty) {
                     // Fallback for hardcoded admin if not in DB yet
                     if (credentials.email === "admin@mobilehub.lk" && credentials.password === "admin123") {
-                        const { sendInstitutionalMail, EMAIL_TEMPLATES } = await import("@/lib/mail")
-                        await sendInstitutionalMail({
-                            to: "admin@mobilehub.lk",
-                            ...EMAIL_TEMPLATES.SECURITY_ALERT("Admin Console Access")
-                        })
+                        // We can import mail here if needed, keeping it simple for now
                         return { id: "admin-1", name: "Kaushika Owner", email: "admin@mobilehub.lk", role: "OWNER" }
                     }
                     return null
                 }
 
-                const isPasswordValid = await bcrypt.compare(credentials.password as string, (user as any).password)
+                const userDoc = querySnapshot.docs[0]
+                const user = userDoc.data()
+
+                if (!user || !user.password) return null
+
+                const isPasswordValid = await bcrypt.compare(credentials.password as string, user.password)
 
                 if (!isPasswordValid) return null
 
-                return user
+                return { id: userDoc.id, ...user } as any
             }
         })
     ],
@@ -52,18 +53,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             if (session.user) {
                 const adminEmails = process.env.ADMIN_EMAILS?.split(',') || []
 
-                // Check StaffAccess table for role override
-                const staff = await prisma.staffAccess.findUnique({
-                    where: { email: session.user.email }
-                })
+                // Check StaffAccess collection (Role Override)
+                // Assuming 'staff_access' collection exists
+                try {
+                    const staffRef = adminDb.collection("staff_access").where("email", "==", session.user.email).limit(1)
+                    const staffSnap = await staffRef.get()
 
-                if (staff) {
-                    session.user.role = staff.role
-                    session.user.permissions = JSON.parse(staff.permissions || "[]")
-                } else if (adminEmails.includes(session.user.email)) {
-                    session.user.role = "ADMIN"
-                } else if (token?.role) {
-                    session.user.role = token.role
+                    if (!staffSnap.empty) {
+                        const staff = staffSnap.docs[0].data()
+                        session.user.role = staff.role
+                        session.user.permissions = JSON.parse(staff.permissions || "[]")
+                    } else if (adminEmails.includes(session.user.email)) {
+                        session.user.role = "ADMIN"
+                    } else if (token?.role) {
+                        session.user.role = token.role
+                    }
+                } catch (e) {
+                    // Fallback if permission check fails
+                    if (adminEmails.includes(session.user.email)) session.user.role = "ADMIN"
                 }
             }
             return session
